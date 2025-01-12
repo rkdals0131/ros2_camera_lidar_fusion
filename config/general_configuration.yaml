@@ -1,0 +1,9 @@
+lidar:
+  topic: /rslidar_points
+  frame_id: rslidar
+
+camera:
+  topic: /camera/image_raw
+  frame_id: camera
+  width: 640
+  height: 480
