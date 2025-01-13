@@ -20,6 +20,10 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'save_data = ros2_camera_lidar_fusion.save_sensor_data:main',
+            'extract_points = ros2_camera_lidar_fusion.extract_points:main',
+            'calculate_calibration = ros2_camera_lidar_fusion.calculate_calibration:main',
+            'lidar_camera_projection = ros2_camera_lidar_fusion.lidar_camera_projection:main',
         ],
     },
 )

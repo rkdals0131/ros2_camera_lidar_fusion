@@ -7,3 +7,8 @@ camera:
   frame_id: camera
   width: 640
   height: 480
+
+general:
+  save_folder: ros2_ws/src/ros2_camera_lidar_fusion/data
+  slop: 0.1
+  keyboard_listener: True

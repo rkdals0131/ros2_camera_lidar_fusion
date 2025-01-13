@@ -27,25 +27,19 @@ RUN pip install --upgrade numpy==1.24.3
 RUN pip install matplotlib==3.6.0
 RUN pip install \
     pandas \
-    ultralytics \
     open3d
-    
-RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
     
 ###### Install package dependencies
 RUN apt-get install -y \
     git \
     libpcl-dev \
-    terminator \
-    v4l-utils \
-    ntp
+    terminator
 
 ###### Install ros dependencies
 RUN apt-get install -y \
     ros-${ROS_DISTRO}-pcl-ros \
     ros-${ROS_DISTRO}-pcl-conversions \
-    ros-${ROS_DISTRO}-cv-bridge \
-    ros-${ROS_DISTRO}-rviz2
+    ros-${ROS_DISTRO}-cv-bridge
 
 ###### Build the workspace
 RUN mkdir -p /ros2_ws/src

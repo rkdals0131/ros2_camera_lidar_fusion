@@ -12,7 +12,10 @@ if [ $isRunning -eq 0 ]; then
         --env="QT_X11_NO_MITSHM=1" \
         --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
         --net host \
+        --ipc host \
+        --pid host \
         --privileged \
+        --volume `pwd`/../:/ros2_ws/src/ros2_camera_lidar_fusion \
         -w /ros2_ws \
         ros2_camera_lidar_fusion:latest
 
