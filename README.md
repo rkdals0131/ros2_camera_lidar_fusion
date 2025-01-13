@@ -6,10 +6,9 @@
 A ROS2 package for calculating **intrinsic** and **extrinsic calibration** between camera and LiDAR sensors. This repository provides an intuitive workflow to fuse data from these sensors, enabling precise projection of LiDAR points into the camera frame and offering an efficient approach to sensor fusion.
 
 ## Visual Overview
-
 | **Static Sensors** | **Moving Sensors** |
 |---------------------|--------------------|
-| <img src="https://github.com/CDonosoK/ros2_camera_lidar_fusion/blob/dev/assets/static_lidar.gif" alt="Static Sensors" width="400"> | <img src="https://github.com/CDonosoK/ros2_camera_lidar_fusion/blob/dev/assets/moving_sensors.gif" alt="Moving Sensors" width="400"> |
+| <img src="https://github.com/CDonosoK/ros2_camera_lidar_fusion/blob/main/assets/static_sensors.gif" alt="Static Sensors" width="400"> | <img src="https://github.com/CDonosoK/ros2_camera_lidar_fusion/blob/dev/assets/moving_sensors.gif" alt="Moving Sensors" width="400"> |
 
 ---
 
