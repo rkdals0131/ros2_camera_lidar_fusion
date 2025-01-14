@@ -79,7 +79,7 @@ This package includes the following ROS2 nodes for camera and LiDAR calibration:
 Follow these steps to perform calibration and data fusion:
 
 1. **Intrinsic Calibration**  
-   Run `camera_calibration.py` to generate the intrinsic calibration file for the camera.
+   Run `get_intrinsic_camera_calibration.py` to generate the intrinsic calibration file for the camera.
 
 2. **Data Recording**  
    Use `save_sensor_data.py` to capture and save synchronized data from the camera and LiDAR.
@@ -88,7 +88,7 @@ Follow these steps to perform calibration and data fusion:
    Execute `extract_points.py` to manually select corresponding points between camera and LiDAR.
 
 4. **Extrinsic Calibration**  
-   Run `calculate_calibration.py` to compute the transformation matrix between camera and LiDAR.
+   Run `get_extrinsic_camera_calibration.py` to compute the transformation matrix between camera and LiDAR.
 
 5. **LiDAR Projection**  
    Use `lidar_camera_projection.py` to project LiDAR points into the camera frame for visualization and analysis.
@@ -100,20 +100,13 @@ ros2 run ros2_camera_lidar_fusion <node_name>
 ```
 For example:
 ```bash
-ros2 run ros2_camera_lidar_fusion camera_calibration.py
+ros2 run ros2_camera_lidar_fusion lidar_camera_projection.py
 ```
 
 ---
 
 ## License
 This project is licensed under the **MIT**. See the [LICENSE](LICENSE) file for details.
-
----
-
-## TODO
-- [ ] Add functionality to streamline intrinsic calibration for the camera.
-- [ ] Enable support for configuration files.
-- [ ] Create a unified flow to execute all calibration steps in a single node.
 
 ---
 

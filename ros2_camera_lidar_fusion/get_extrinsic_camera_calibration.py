@@ -7,17 +7,23 @@ import cv2
 from rclpy.node import Node
 import rclpy
 
+from ros2_camera_lidar_fusion.read_yaml import extract_configuration
+
 class CameraLidarExtrinsicNode(Node):
     def __init__(self):
         super().__init__('camera_lidar_extrinsic_node')
-
-        self.declare_parameter('corr_file', '/ros2_ws/src/ros2_camera_lidar_fusion/data/ros2_camera_lidar_fusion_correspondences.txt')
-        self.declare_parameter('camera_yaml', '/ros2_ws/src/ros2_camera_lidar_fusion/config/camera_calibration.yaml')
-        self.declare_parameter('output_dir', '/ros2_ws/src/ros2_camera_lidar_fusion/config')
-
-        self.corr_file = self.get_parameter('corr_file').get_parameter_value().string_value
-        self.camera_yaml = self.get_parameter('camera_yaml').get_parameter_value().string_value
-        self.output_dir = self.get_parameter('output_dir').get_parameter_value().string_value
+        
+        config_file = extract_configuration()
+        if config_file is None:
+            self.get_logger().error("Failed to extract configuration file.")
+            return
+        
+        self.corr_file = config_file['general']['correspondence_file']
+        self.corr_file = f'/ros2_ws/src/ros2_camera_lidar_fusion/data/{self.corr_file}'
+        self.camera_yaml = config_file['general']['camera_intrinsic_calibration']
+        self.camera_yaml = f'/ros2_ws/src/ros2_camera_lidar_fusion/config/{self.camera_yaml}'
+        self.output_dir = config_file['general']['config_folder']
+        self.file = config_file['general']['camera_extrinsic_calibration']
 
         self.get_logger().info('Starting extrinsic calibration...')
         self.solve_extrinsic_with_pnp()
@@ -95,7 +101,7 @@ class CameraLidarExtrinsicNode(Node):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
-        out_yaml = os.path.join(self.output_dir, "camera_lidar_extrinsic.yaml")
+        out_yaml = os.path.join(self.output_dir, self.file)
         data_out = {
             "extrinsic_matrix": T_lidar_to_cam.tolist()
         }

@@ -10,6 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/config', ['config/general_configuration.yaml']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -20,9 +21,10 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'get_intrinsic_camera_calibration = ros2_camera_lidar_fusion.get_intrinsic_camera_calibration:main',
+            'get_extrinsic_camera_calibration = ros2_camera_lidar_fusion.get_extrinsic_camera_calibration:main',
             'save_data = ros2_camera_lidar_fusion.save_sensor_data:main',
             'extract_points = ros2_camera_lidar_fusion.extract_points:main',
-            'calculate_calibration = ros2_camera_lidar_fusion.calculate_calibration:main',
             'lidar_camera_projection = ros2_camera_lidar_fusion.lidar_camera_projection:main',
         ],
     },

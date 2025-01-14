@@ -1,6 +1,6 @@
 # Ignore files
-camera_calibration.yaml
-camera_lidar_extrinsic.yaml
+camera_extrinsic_calibration.yaml
+camera_intrinsic_calibration.yaml
 
 # Ignore folders
 .vscode

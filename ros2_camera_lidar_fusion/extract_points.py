@@ -7,18 +7,23 @@ import numpy as np
 from rclpy.node import Node
 import rclpy
 
+from ros2_camera_lidar_fusion.read_yaml import extract_configuration
 
 class ImageCloudCorrespondenceNode(Node):
     def __init__(self):
         super().__init__('image_cloud_correspondence_node')
 
-        self.declare_parameter('data_dir', '/ros2_ws/src/ros2_camera_lidar_fusion/data')
-
-        self.data_dir = self.get_parameter('data_dir').get_parameter_value().string_value
+        config_file = extract_configuration()
+        if config_file is None:
+            self.get_logger().error("Failed to extract configuration file.")
+            return
+        
+        self.data_dir = config_file['general']['data_folder']
+        self.file = config_file['general']['correspondence_file']
 
         if not os.path.exists(self.data_dir):
-            self.get_logger().error(f"Data directory '{self.data_dir}' does not exist.")
-            return
+            self.get_logger().warn(f"Data directory '{self.data_dir}' does not exist.")
+            os.makedirs(self.data_dir)
 
         self.get_logger().info(f"Looking for .png and .pcd file pairs in '{self.data_dir}'")
         self.process_file_pairs()
@@ -93,7 +98,7 @@ class ImageCloudCorrespondenceNode(Node):
         vis.add_geometry(pcd)
 
         render_opt = vis.get_render_option()
-        render_opt.point_size = 1.0
+        render_opt.point_size = 2.0
 
         vis.run()
         vis.destroy_window()
@@ -131,7 +136,7 @@ class ImageCloudCorrespondenceNode(Node):
             cloud_points = self.pick_cloud_points(pcd_path)
             self.get_logger().info(f"\nSelected {len(cloud_points)} points in the cloud.\n")
 
-            out_txt = os.path.join(self.data_dir, f"ros2_camera_lidar_fusion_correspondences.txt")
+            out_txt = os.path.join(self.data_dir, self.file)
             with open(out_txt, 'w') as f:
                 f.write("# u, v, x, y, z\n")
                 min_len = min(len(image_points), len(cloud_points))

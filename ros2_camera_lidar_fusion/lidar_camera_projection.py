@@ -9,9 +9,11 @@ import numpy as np
 import yaml
 import struct
 
-from sensor_msgs.msg import Image, PointCloud2, PointField
+from sensor_msgs.msg import Image, PointCloud2
 from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
+
+from ros2_camera_lidar_fusion.read_yaml import extract_configuration
 
 
 def load_extrinsic_matrix(yaml_path: str) -> np.ndarray:
@@ -79,18 +81,32 @@ def pointcloud2_to_xyz_array_fast(cloud_msg: PointCloud2, skip_rate: int = 1) ->
 class LidarCameraProjectionNode(Node):
     def __init__(self):
         super().__init__('lidar_camera_projection_node')
-        extrinsic_yaml = "/ros2_ws/src/ros2_camera_lidar_fusion/config/camera_lidar_extrinsic.yaml"
+        
+        config_file = extract_configuration()
+        if config_file is None:
+            self.get_logger().error("Failed to extract configuration file.")
+            return
+        
+        config_folder = config_file['general']['config_folder']
+        extrinsic_yaml = config_file['general']['camera_extrinsic_calibration']
+        extrinsic_yaml = os.path.join(config_folder, extrinsic_yaml)
         self.T_lidar_to_cam = load_extrinsic_matrix(extrinsic_yaml)
 
-        camera_yaml = "/ros2_ws/src/ros2_camera_lidar_fusion/config/camera_calibration.yaml"
+        camera_yaml = config_file['general']['camera_intrinsic_calibration']
+        camera_yaml = os.path.join(config_folder, camera_yaml)
         self.camera_matrix, self.dist_coeffs = load_camera_calibration(camera_yaml)
 
         self.get_logger().info("Loaded extrinsic:\n{}".format(self.T_lidar_to_cam))
         self.get_logger().info("Camera matrix:\n{}".format(self.camera_matrix))
         self.get_logger().info("Distortion coeffs:\n{}".format(self.dist_coeffs))
 
-        self.image_sub = Subscriber(self, Image, '/pcl_human_segmentation/camera/raw_image')
-        self.lidar_sub = Subscriber(self, PointCloud2, '/rslidar_points')
+        lidar_topic = config_file['lidar']['lidar_topic']
+        image_topic = config_file['camera']['image_topic']
+        self.get_logger().info(f"Subscribing to lidar topic: {lidar_topic}")
+        self.get_logger().info(f"Subscribing to image topic: {image_topic}")
+
+        self.image_sub = Subscriber(self, Image, image_topic)
+        self.lidar_sub = Subscriber(self, PointCloud2, lidar_topic)
 
         self.ts = ApproximateTimeSynchronizer(
             [self.image_sub, self.lidar_sub],
@@ -99,8 +115,8 @@ class LidarCameraProjectionNode(Node):
         )
         self.ts.registerCallback(self.sync_callback)
 
-        # Publisher
-        self.pub_image = self.create_publisher(Image, '/lidar_projection_image', 1)
+        projected_topic = config_file['camera']['projected_topic']
+        self.pub_image = self.create_publisher(Image, projected_topic, 1)
         self.bridge = CvBridge()
 
         self.skip_rate = 1

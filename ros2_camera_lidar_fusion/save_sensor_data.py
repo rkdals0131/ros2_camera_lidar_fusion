@@ -10,21 +10,24 @@ from sensor_msgs_py import point_cloud2
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 import threading
 
+from ros2_camera_lidar_fusion.read_yaml import extract_configuration
+
 class SaveData(Node):
     def __init__(self):
         super().__init__('save_data_node')
         self.get_logger().info('Save data node has been started')
 
-        self.declare_parameter('max_file_saved', 10)
-        self.declare_parameter('storage_path', '/ros2_ws/src/ros2_camera_lidar_fusion/data')
-        self.declare_parameter('camera_topic', '/pcl_human_segmentation/camera/raw_image')
-        self.declare_parameter('lidar_topic', '/rslidar_points')
-        self.declare_parameter('keyboard_listener', True)
-        self.declare_parameter('slop', 0.1)
-
-        self.max_file_saved = self.get_parameter('max_file_saved').get_parameter_value().integer_value
-        self.storage_path = self.get_parameter('storage_path').get_parameter_value().string_value
-        self.keyboard_listener_enabled = self.get_parameter('keyboard_listener').get_parameter_value().bool_value
+        config_file = extract_configuration()
+        if config_file is None:
+            self.get_logger().error("Failed to extract configuration file.")
+            return
+        
+        self.max_file_saved = config_file['general']['max_file_saved']
+        self.storage_path = config_file['general']['data_folder']
+        self.image_topic = config_file['camera']['image_topic']
+        self.lidar_topic = config_file['lidar']['lidar_topic']
+        self.keyboard_listener_enabled = config_file['general']['keyboard_listener']
+        self.slop = config_file['general']['slop']
 
         if not os.path.exists(self.storage_path):
             os.makedirs(self.storage_path)
@@ -33,18 +36,18 @@ class SaveData(Node):
         self.image_sub = Subscriber(
             self,
             Image,
-            self.get_parameter('camera_topic').get_parameter_value().string_value
+            self.image_topic
         )
         self.pointcloud_sub = Subscriber(
             self,
             PointCloud2,
-            self.get_parameter('lidar_topic').get_parameter_value().string_value
+            self.lidar_topic
         )
 
         self.ts = ApproximateTimeSynchronizer(
             [self.image_sub, self.pointcloud_sub],
             queue_size=10,
-            slop=self.get_parameter('slop').get_parameter_value().double_value
+            slop=self.slop
         )
         self.ts.registerCallback(self.synchronize_data)
 
