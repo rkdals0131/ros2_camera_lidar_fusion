@@ -105,9 +105,27 @@ ros2 run ros2_camera_lidar_fusion lidar_camera_projection.py
 
 ---
 
+## Maintainer
+This package is maintained by:
+
+**Cristian Donoso**  
+Email: [clemente.donosok@gmail.com](mailto:clemente.donosok@gmail.com)
+GitHub: [CDonosoK](https://github.com/CDonosoK)  
+
+---
+
 ## License
 This project is licensed under the **MIT**. See the [LICENSE](LICENSE) file for details.
 
 ---
 
+## Support the Project 💖
+
+If you find this project helpful and want to support its ongoing development, you can buy me a coffee! Every contribution helps me dedicate more time to improving and maintaining open-source software.
+
+<a href="https://www.buymeacoffee.com/CDonosoK" target="https://buymeacoffee.com/cdonosok">
+  <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-orange?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me a Coffee">
+</a>
+
+---
 Contributions and feedback are welcome! If you encounter any issues or have suggestions for improvements, feel free to open an issue or submit a pull request.
