@@ -10,6 +10,14 @@ A ROS2 package for calculating **intrinsic** and **extrinsic calibration** betwe
 |---------------------|--------------------|
 | <img src="https://github.com/CDonosoK/ros2_camera_lidar_fusion/blob/main/assets/static_sensors.gif" alt="Static Sensors" width="400"> | <img src="https://github.com/CDonosoK/ros2_camera_lidar_fusion/blob/dev/assets/moving_sensors.gif" alt="Moving Sensors" width="400"> |
 
+## Support 💖
+
+If you find this project helpful and want to support its ongoing development, you can buy me a coffee! Every contribution helps me dedicate more time to improving and maintaining open-source software.
+
+<a href="https://www.buymeacoffee.com/CDonosoK" target="https://buymeacoffee.com/cdonosok">
+  <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-orange?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me a Coffee">
+</a>
+
 ---
 
 ## Table of Contents
@@ -21,7 +29,6 @@ A ROS2 package for calculating **intrinsic** and **extrinsic calibration** betwe
    - [Workflow](#workflow)
    - [Running Nodes](#running-nodes)
 3. [License](#license)
-4. [TODO](#todo)
 
 ---
 
@@ -69,10 +76,10 @@ This package includes the following ROS2 nodes for camera and LiDAR calibration:
 
 | **Node Name**           | **Description**                                                                                       | **Output**                                     |
 |--------------------------|-------------------------------------------------------------------------------------------------------|-----------------------------------------------|
-| `camera_calibration.py`  | Computes the intrinsic calibration of the camera.                                                    | Camera intrinsic calibration file.            |
+| `get_intrinsic_camera_calibration.py`  | Computes the intrinsic calibration of the camera.                                                    | Camera intrinsic calibration file.            |
 | `save_sensor_data.py`    | Records synchronized data from camera and LiDAR sensors.                                             | Sensor data file.                             |
 | `extract_points.py`      | Allows manual selection of corresponding points between camera and LiDAR.                            | Corresponding points file.                    |
-| `calculate_calibration.py` | Computes the extrinsic calibration between camera and LiDAR sensors.                                | Extrinsic calibration file.                   |
+| `get_extrinsic_camera_calibration.py` | Computes the extrinsic calibration between camera and LiDAR sensors.                                | Extrinsic calibration file.                   |
 | `lidar_camera_projection.py` | Projects LiDAR points into the camera frame using intrinsic and extrinsic calibration parameters. | Visualization of projected points.            |
 
 ### Workflow
@@ -116,16 +123,6 @@ GitHub: [CDonosoK](https://github.com/CDonosoK)
 
 ## License
 This project is licensed under the **MIT**. See the [LICENSE](LICENSE) file for details.
-
----
-
-## Support the Project 💖
-
-If you find this project helpful and want to support its ongoing development, you can buy me a coffee! Every contribution helps me dedicate more time to improving and maintaining open-source software.
-
-<a href="https://www.buymeacoffee.com/CDonosoK" target="https://buymeacoffee.com/cdonosok">
-  <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-orange?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me a Coffee">
-</a>
 
 ---
 Contributions and feedback are welcome! If you encounter any issues or have suggestions for improvements, feel free to open an issue or submit a pull request.
