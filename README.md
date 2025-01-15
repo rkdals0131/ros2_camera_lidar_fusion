@@ -115,7 +115,7 @@ ros2 run ros2_camera_lidar_fusion lidar_camera_projection.py
 ## Maintainer
 This package is maintained by:
 
-**Cristian Donoso**  
+**Clemente Donoso**  
 Email: [clemente.donosok@gmail.com](mailto:clemente.donosok@gmail.com)
 GitHub: [CDonosoK](https://github.com/CDonosoK)  
 
