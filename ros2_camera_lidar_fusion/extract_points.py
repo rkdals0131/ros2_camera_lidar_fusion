@@ -93,12 +93,12 @@ class ImageCloudCorrespondenceNode(Node):
         self.get_logger().info("  - Shift + left click to select a point")
         self.get_logger().info("  - Press 'q' or ESC to close the window when finished\n")
 
-        vis = o3d.visualization.VisualizerWithEditing()
+        vis = o3d.visualization.VisualizerWithEditing() 
         vis.create_window(window_name="Select points on the cloud", width=1280, height=720)
         vis.add_geometry(pcd)
 
         render_opt = vis.get_render_option()
-        render_opt.point_size = 2.0
+        render_opt.point_size = 3.0
 
         vis.run()
         vis.destroy_window()

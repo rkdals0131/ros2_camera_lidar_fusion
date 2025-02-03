@@ -12,8 +12,8 @@ camera:
 
 chessboard:
   pattern_size:
-    rows: 6
-    columns: 9
+    rows: 5
+    columns: 8
   square_size_meters: 0.03
 
 general:

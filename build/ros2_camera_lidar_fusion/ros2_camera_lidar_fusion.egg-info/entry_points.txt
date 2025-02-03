@@ -1,0 +1,7 @@
+[console_scripts]
+extract_points = ros2_camera_lidar_fusion.extract_points:main
+get_extrinsic_camera_calibration = ros2_camera_lidar_fusion.get_extrinsic_camera_calibration:main
+get_intrinsic_camera_calibration = ros2_camera_lidar_fusion.get_intrinsic_camera_calibration:main
+lidar_camera_projection = ros2_camera_lidar_fusion.lidar_camera_projection:main
+save_data = ros2_camera_lidar_fusion.save_sensor_data:main
+

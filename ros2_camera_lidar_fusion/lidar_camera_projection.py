@@ -12,6 +12,7 @@ import struct
 from sensor_msgs.msg import Image, PointCloud2
 from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 from ros2_camera_lidar_fusion.read_yaml import extract_configuration
 
@@ -87,6 +88,12 @@ class LidarCameraProjectionNode(Node):
             self.get_logger().error("Failed to extract configuration file.")
             return
         
+        best_effort_qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+        
         config_folder = config_file['general']['config_folder']
         extrinsic_yaml = config_file['general']['camera_extrinsic_calibration']
         extrinsic_yaml = os.path.join(config_folder, extrinsic_yaml)
@@ -106,7 +113,7 @@ class LidarCameraProjectionNode(Node):
         self.get_logger().info(f"Subscribing to image topic: {image_topic}")
 
         self.image_sub = Subscriber(self, Image, image_topic)
-        self.lidar_sub = Subscriber(self, PointCloud2, lidar_topic)
+        self.lidar_sub = Subscriber(self, PointCloud2, lidar_topic, qos_profile=best_effort_qos)
 
         self.ts = ApproximateTimeSynchronizer(
             [self.image_sub, self.lidar_sub],
