@@ -8,6 +8,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image, PointCloud2
 from sensor_msgs_py import point_cloud2
 from message_filters import Subscriber, ApproximateTimeSynchronizer
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 import threading
 
 from ros2_camera_lidar_fusion.read_yaml import extract_configuration
@@ -21,6 +22,13 @@ class SaveData(Node):
         if config_file is None:
             self.get_logger().error("Failed to extract configuration file.")
             return
+        
+        # QoS Policy 수정
+        best_effort_qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1
+        )
         
         self.max_file_saved = config_file['general']['max_file_saved']
         self.storage_path = config_file['general']['data_folder']
@@ -41,7 +49,8 @@ class SaveData(Node):
         self.pointcloud_sub = Subscriber(
             self,
             PointCloud2,
-            self.lidar_topic
+            self.lidar_topic,
+            qos_profile=best_effort_qos
         )
 
         self.ts = ApproximateTimeSynchronizer(
