@@ -37,6 +37,7 @@ class CameraCalibrationNode(Node):
         self.obj_points = []
         self.img_points = []
 
+        # 체스보드 코너의 3D 좌표 생성 (평면상의 좌표)
         self.objp = np.zeros((self.chessboard_rows * self.chessboard_cols, 3), np.float32)
         self.objp[:, :2] = np.mgrid[0:self.chessboard_cols, 0:self.chessboard_rows].T.reshape(-1, 2)
         self.objp *= self.square_size
@@ -45,29 +46,44 @@ class CameraCalibrationNode(Node):
 
     def image_callback(self, msg):
         try:
+            # ROS 이미지 메시지를 OpenCV 이미지로 변환
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
 
+            # 체스보드 패턴 검출
             ret, corners = cv2.findChessboardCorners(gray, (self.chessboard_cols, self.chessboard_rows), None)
 
             if ret:
-                self.obj_points.append(self.objp)
+                # self.objp를 그대로 추가하면 나중에 문제가 생길 수 있으므로 복사본을 추가합니다.
+                self.obj_points.append(self.objp.copy())
+                # 코너 위치를 더 정밀하게 조정
                 refined_corners = cv2.cornerSubPix(
                     gray, corners, (11, 11), (-1, -1),
                     criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
                 )
                 self.img_points.append(refined_corners)
 
+                # 체스보드 코너 그리기
                 cv2.drawChessboardCorners(cv_image, (self.chessboard_cols, self.chessboard_rows), refined_corners, ret)
-                self.get_logger().info("Chessboard detected and points added.")
+                self.get_logger().info("체스보드가 감지되어 점들이 추가되었습니다.")
             else:
-                self.get_logger().warn("Chessboard not detected in image.")
+                self.get_logger().warn("체스보드가 이미지에서 감지되지 않았습니다.")
 
+            # 캡처된 이미지 수를 이미지에 표시합니다.
+            cv2.putText(cv_image, f"Captured Images: {len(self.obj_points)}", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+            # 이미지 창에 결과 출력
             cv2.imshow("Image", cv_image)
-            cv2.waitKey(1)
+            key = cv2.waitKey(1) & 0xFF
+            # 'q' 키를 누르면 캘리브레이션 저장 후 노드를 종료합니다.
+            if key == ord('q'):
+                self.save_calibration()
+                self.get_logger().info("캘리브레이션 저장 후 노드를 종료합니다.")
+                rclpy.shutdown()
 
         except Exception as e:
-            self.get_logger().error(f"Failed to process image: {e}")
+            self.get_logger().error(f"이미지 처리 실패: {e}")
 
     def save_calibration(self):
         if len(self.obj_points) < 10:
@@ -98,8 +114,8 @@ class CameraCalibrationNode(Node):
                 'square_size_meters': self.square_size
             },
             'image_size': {
-                'width': 640,
-                'height': 480
+                'width': self.image_width,
+                'height': self.image_height
             },
             'rms_reprojection_error': ret
         }
@@ -118,12 +134,13 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
+        # 키보드 인터럽트 시에도 캘리브레이션 저장
         node.save_calibration()
-        node.get_logger().info("Calibration process completed.")
+        node.get_logger().info("캘리브레이션 과정 완료.")
     finally:
+        cv2.destroyAllWindows()
         node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()
