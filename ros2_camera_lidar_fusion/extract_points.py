@@ -93,7 +93,7 @@ class ImageCloudCorrespondenceNode(Node):
         self.get_logger().info("  - Shift + left click to select a point")
         self.get_logger().info("  - Press 'q' or ESC to close the window when finished\n")
 
-        vis = o3d.visualization.VisualizerWithEditing() 
+        vis = o3d.visualization.VisualizerWithEditing() # VWE 메소드 내부적으로 마우스 콜백이 있어서 선택된 포인트 인덱스 저장
         vis.create_window(window_name="Select points on the cloud", width=1280, height=720)
         vis.add_geometry(pcd)
 
@@ -102,7 +102,7 @@ class ImageCloudCorrespondenceNode(Node):
 
         vis.run()
         vis.destroy_window()
-        picked_indices = vis.get_picked_points()
+        picked_indices = vis.get_picked_points() # 선택된 인덱스들을 반환
 
         np_points = np.asarray(pcd.points)
         picked_xyz = []
