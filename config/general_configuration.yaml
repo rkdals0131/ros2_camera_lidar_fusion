@@ -22,7 +22,7 @@ general:
   correspondence_file: ros2_camera_lidar_fusion_correspondences.txt
   camera_intrinsic_calibration: camera_intrinsic_calibration.yaml
   camera_extrinsic_calibration: camera_extrinsic_calibration.yaml
-  slop: 1.0
+  slop: 0.1 
   max_file_saved: 10
   keyboard_listener: True
   get_intrinsics: True
