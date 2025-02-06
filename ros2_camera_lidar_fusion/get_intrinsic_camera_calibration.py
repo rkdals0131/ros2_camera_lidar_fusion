@@ -39,44 +39,63 @@ class CameraCalibrationNode(Node):
         self.image_sub = self.create_subscription(Image, self.image_topic, self.image_callback, 10)
         self.bridge = CvBridge() # ROS 이미지를 OpenCV 이미지로 변환
 
-        self.obj_points = [] # 현실 좌표(체커보드)
-        self.img_points = [] # 픽셀 좌표
 
-        # 체스판 3D 점 초기화
-        self.objp = np.zeros((self.chessboard_rows * self.chessboard_cols, 3), np.float32) # 체스판 칸 수마다 3차원 좌표 있음. 
-        self.objp[:, :2] = np.mgrid[0:self.chessboard_cols, 0:self.chessboard_rows].T.reshape(-1, 2) # z 정보는 건드리지 않고 0 유지
-        # 각 열이 0~self.chessboard_cols, 각 행이 0~self.chessboard_rows인 그리드를 각각 생성, (2, rows, cols) -> (rows, cols, 2)로 전치
-        # reshape로 2차원 배열을 [(0,0), (1,0), ... (5,4), (6,4)] 로 변환
-        self.objp *= self.square_size # self.objp의 모든 x, y 좌표를 square_size로 스케일링
+        self.obj_points = []
+        self.img_points = []
+        self.latest_image = None  # 최신 이미지를 저장할 변수
+
+        # 체스보드 코너의 3D 좌표 생성 (평면상의 좌표)
+        self.objp = np.zeros((self.chessboard_rows * self.chessboard_cols, 3), np.float32)
+        self.objp[:, :2] = np.mgrid[0:self.chessboard_cols, 0:self.chessboard_rows].T.reshape(-1, 2)
+        self.objp *= self.square_size
+
+
+        # 1초에 한 번 실행되는 타이머 설정
+        self.timer = self.create_timer(0.3, self.process_latest_image)
 
         self.get_logger().info("Camera calibration node initialized. Waiting for images...")
 
     def image_callback(self, msg):
+        """이미지 콜백: 최신 이미지만 저장하고, 처리 로직은 타이머에서 실행"""
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8') # 반환값은 변환된 OpenCV 이미지
-            gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY) # 이미지를 그레이스케일 이미지1로 변환
-
-            ret, corners = cv2.findChessboardCorners(gray, (self.chessboard_cols, self.chessboard_rows), None) # 체스판 코너 검출
-            # ret은 코너 검출 성공 여부, corners는 코너 2D 좌표 배열
-
-            if ret:
-                self.obj_points.append(self.objp) # 초기화된 체스보드 현실 3D 좌표 추가
-                refined_corners = cv2.cornerSubPix(
-                    gray, corners, (11, 11), (-1, -1), # 원본 그레이스케일 이미지1, 코너 좌표, 검색 윈도우 크기, 검색 영역 데드존(없음)
-                    criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001) # 코너 검출 종료 조건
-                )
-                self.img_points.append(refined_corners) # 2D 코너 좌표 추가
-
-                cv2.drawChessboardCorners(cv_image, (self.chessboard_cols, self.chessboard_rows), refined_corners, ret) # 체스판 코너 그리기
-                self.get_logger().info("Chessboard detected and points added.")
-            else:
-                self.get_logger().warn("Chessboard not detected in image.")
-
-            cv2.imshow("Image", cv_image) # 이미지 표시
-            cv2.waitKey(1) # 키보드 입력 대기, 1ms 대기 후 다음 프레임 처리
-
+            self.latest_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:
-            self.get_logger().error(f"Failed to process image: {e}")
+            self.get_logger().error(f"이미지 변환 실패: {e}")
+
+    def process_latest_image(self):
+        """타이머에서 호출: 최신 이미지를 처리"""
+        if self.latest_image is None:
+            self.get_logger().warn("아직 수신된 이미지가 없습니다.")
+            return
+
+        gray = cv2.cvtColor(self.latest_image, cv2.COLOR_BGR2GRAY)
+
+        # 체스보드 패턴 검출
+        ret, corners = cv2.findChessboardCorners(gray, (self.chessboard_cols, self.chessboard_rows), None)
+
+        if ret:
+            self.obj_points.append(self.objp.copy())
+            refined_corners = cv2.cornerSubPix(
+                gray, corners, (11, 11), (-1, -1),
+                criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+            )
+            self.img_points.append(refined_corners)
+
+            cv2.drawChessboardCorners(self.latest_image, (self.chessboard_cols, self.chessboard_rows), refined_corners, ret)
+            self.get_logger().info("체스보드가 감지되어 점들이 추가되었습니다.")
+        else:
+            self.get_logger().warn("체스보드가 이미지에서 감지되지 않았습니다.")
+
+        # 캡처된 이미지 수를 이미지에 표시
+        cv2.putText(self.latest_image, f"Captured Images: {len(self.obj_points)}", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+        cv2.imshow("Image", self.latest_image)
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            self.save_calibration()
+            self.get_logger().info("캘리브레이션 저장 후 노드를 종료합니다.")
+            rclpy.shutdown()
 
     def save_calibration(self):
         if len(self.obj_points) < 10:  # 최소 10장 이상 캘리브레이션 이미지
@@ -108,8 +127,8 @@ class CameraCalibrationNode(Node):
                 'square_size_meters': self.square_size
             },
             'image_size': {
-                'width': 640,
-                'height': 480
+                'width': self.image_width,
+                'height': self.image_height
             },
             'rms_reprojection_error': ret   # RMS 재투영 오차(보정 정확도)
         }
@@ -129,11 +148,11 @@ def main(args=None):
         rclpy.spin(node)
     except KeyboardInterrupt:                                           # 돌다가 키보드로 중지하면 캘리브레이션 끝
         node.save_calibration()
-        node.get_logger().info("Calibration process completed.")
+        node.get_logger().info("캘리브레이션 과정 완료.")
     finally:
+        cv2.destroyAllWindows()
         node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

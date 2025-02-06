@@ -18,12 +18,14 @@ class CameraLidarExtrinsicNode(Node):
             self.get_logger().error("Failed to extract configuration file.")
             return
         
-        self.corr_file = config_file['general']['correspondence_file']                          # 라이다, 카메라 좌표 쌍 파일 경로
-        self.corr_file = f'/ros2_ws/src/ros2_camera_lidar_fusion/data/{self.corr_file}'         # 파일 경로 완성
-        self.camera_yaml = config_file['general']['camera_intrinsic_calibration']               # 카메라 내부 파라미터 파일 경로
-        self.camera_yaml = f'/ros2_ws/src/ros2_camera_lidar_fusion/config/{self.camera_yaml}'
-        self.output_dir = config_file['general']['config_folder']                               # 출력 파일 경로
-        self.file = config_file['general']['camera_extrinsic_calibration']                      # 출력 파일 이름
+
+        self.corr_file = config_file['general']['correspondence_file']
+        self.corr_file = f'/home/user1/ros2_fusion_ws/src/ros2_camera_lidar_fusion/data/{self.corr_file}'
+        self.camera_yaml = config_file['general']['camera_intrinsic_calibration']
+        self.camera_yaml = f'/home/user1/ros2_fusion_ws/src/ros2_camera_lidar_fusion/config/{self.camera_yaml}'
+        self.output_dir = config_file['general']['config_folder']
+        self.file = config_file['general']['camera_extrinsic_calibration']
+
 
         self.get_logger().info('Starting extrinsic calibration...')
         self.solve_extrinsic_with_pnp()    # 클래스 생성되자마자 바로 실행

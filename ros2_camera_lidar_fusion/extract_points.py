@@ -104,6 +104,7 @@ class ImageCloudCorrespondenceNode(Node):
         render_opt = vis.get_render_option()  # 렌더링 옵션 설정
         render_opt.point_size = 2.0  # 포인트 크기 설정
 
+
         vis.run()  # 시각화 실행
         vis.destroy_window()  # 윈도우 닫기
         picked_indices = vis.get_picked_points()  # 사용자가 선택한 포인트의 인덱스를 리스트로 반환 
@@ -130,7 +131,16 @@ class ImageCloudCorrespondenceNode(Node):
         for prefix, png_path, pcd_path in file_pairs:
             self.get_logger().info(f"  {prefix} -> {png_path}, {pcd_path}")
 
-        for prefix, png_path, pcd_path in file_pairs:  # 각 파일 쌍에 대해 처리
+
+        # 출력 파일 경로 설정
+        out_txt = os.path.join(self.data_dir, self.file)
+        # 기존 파일 내용을 초기화하고 헤더를 작성합니다.
+        with open(out_txt, 'w') as f:
+            f.write("# u, v, x, y, z\n")
+
+        # 각 파일 쌍에 대해 대응점을 선택하고, 결과를 파일에 이어서 기록합니다.
+        for prefix, png_path, pcd_path in file_pairs:
+
             self.get_logger().info("\n========================================")
             self.get_logger().info(f"Processing pair: {prefix}")
             self.get_logger().info(f"Image: {png_path}")
@@ -143,16 +153,17 @@ class ImageCloudCorrespondenceNode(Node):
             cloud_points = self.pick_cloud_points(pcd_path)  # 포인트 클라우드 포인트 선택
             self.get_logger().info(f"\nSelected {len(cloud_points)} points in the cloud.\n")
 
-            out_txt = os.path.join(self.data_dir, self.file)  # 결과 저장 경로 설정
-            with open(out_txt, 'w') as f:  # 결과 파일 열기
-                f.write("# u, v, x, y, z\n")  # 헤더 작성
-                min_len = min(len(image_points), len(cloud_points))  # 최소 길이 계산
-                for i in range(min_len):               # 포인트 쌍 저장
-                    (u, v) = image_points[i]           # 이미지 포인트 좌표 
-                    (x, y, z) = cloud_points[i]        # 포인트 클라우드 포인트 좌표
-                    f.write(f"{u},{v},{x},{y},{z}\n")  # 포인트 쌍 저장
 
-            self.get_logger().info(f"Saved {min_len} correspondences in: {out_txt}")
+            min_len = min(len(image_points), len(cloud_points))
+            # append 모드('a')로 파일을 열어 대응점을 이어서 기록합니다.
+            with open(out_txt, 'a') as f:
+                for i in range(min_len):
+                    (u, v) = image_points[i]
+                    (x, y, z) = cloud_points[i]
+                    f.write(f"{u},{v},{x},{y},{z}\n")
+
+
+            self.get_logger().info(f"Appended {min_len} correspondences for pair '{prefix}' to: {out_txt}")
             self.get_logger().info("========================================")
 
         self.get_logger().info("\nProcessing complete! Correspondences saved for all pairs.")

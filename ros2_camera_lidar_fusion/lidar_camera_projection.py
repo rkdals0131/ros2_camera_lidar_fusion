@@ -12,6 +12,7 @@ import struct
 from sensor_msgs.msg import Image, PointCloud2
 from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 from ros2_camera_lidar_fusion.read_yaml import extract_configuration
 
@@ -88,7 +89,12 @@ class LidarCameraProjectionNode(Node):
             self.get_logger().error("Failed to extract configuration file.")
             return
         
-        # 외부 행렬 및 카메라 보정 데이터 로드
+        best_effort_qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+        
         config_folder = config_file['general']['config_folder']
         extrinsic_yaml = config_file['general']['camera_extrinsic_calibration']
         extrinsic_yaml = os.path.join(config_folder, extrinsic_yaml)
@@ -109,8 +115,8 @@ class LidarCameraProjectionNode(Node):
         self.get_logger().info(f"Subscribing to lidar topic: {lidar_topic}")
         self.get_logger().info(f"Subscribing to image topic: {image_topic}")
 
-        self.image_sub = Subscriber(self, Image, image_topic)  # 이미지 구독자 생성
-        self.lidar_sub = Subscriber(self, PointCloud2, lidar_topic)  # 라이다 구독자 생성
+        self.image_sub = Subscriber(self, Image, image_topic)
+        self.lidar_sub = Subscriber(self, PointCloud2, lidar_topic, qos_profile=best_effort_qos)
 
         # 메시지 동기화 설정
         self.ts = ApproximateTimeSynchronizer( # 두 개 이상의 ROS 메시지 토픽을 동기화, 타임스탬프가 가장 가까운 메시지를 동기화

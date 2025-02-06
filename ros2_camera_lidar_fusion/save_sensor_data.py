@@ -8,6 +8,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image, PointCloud2
 from sensor_msgs_py import point_cloud2
 from message_filters import Subscriber, ApproximateTimeSynchronizer
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 import threading
 
 from ros2_camera_lidar_fusion.read_yaml import extract_configuration
@@ -22,14 +23,21 @@ class SaveData(Node):
             self.get_logger().error("Failed to extract configuration file.")
             return
         
-        self.max_file_saved = config_file['general']['max_file_saved'] # 최대 저장 파일 수
-        self.storage_path = config_file['general']['data_folder'] # 데이터 저장 경로
-        self.image_topic = config_file['camera']['image_topic'] # 카메라 이미지 토픽
-        self.lidar_topic = config_file['lidar']['lidar_topic'] # 라이다 포인트 토픽
-        self.keyboard_listener_enabled = config_file['general']['keyboard_listener'] # 키보드로 데이터 저장을 제어할지 여부
-        self.slop = config_file['general']['slop'] # 토픽 데이터 동기화 시간 차이 허용 범위
+        # QoS Policy 수정
+        best_effort_qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+        
+        self.max_file_saved = config_file['general']['max_file_saved']
+        self.storage_path = config_file['general']['data_folder']
+        self.image_topic = config_file['camera']['image_topic']
+        self.lidar_topic = config_file['lidar']['lidar_topic']
+        self.keyboard_listener_enabled = config_file['general']['keyboard_listener']
+        self.slop = config_file['general']['slop']
 
-        if not os.path.exists(self.storage_path): # 데이터 저장 경로가 없으면 생성
+        if not os.path.exists(self.storage_path):
             os.makedirs(self.storage_path)
         self.get_logger().warn(f'Data will be saved at {self.storage_path}') # 데이터 저장 경로 출력
 
@@ -41,7 +49,8 @@ class SaveData(Node):
         self.pointcloud_sub = Subscriber( # 지정된 라이다 포인트 토픽 구독
             self,
             PointCloud2,
-            self.lidar_topic
+            self.lidar_topic,
+            qos_profile=best_effort_qos
         )
 
         self.ts = ApproximateTimeSynchronizer( # 이미지와 라이다 포인트 토픽 동기화
