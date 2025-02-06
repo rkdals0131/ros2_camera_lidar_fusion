@@ -15,24 +15,30 @@ class CameraCalibrationNode(Node):
     def __init__(self):
         super().__init__('camera_calibration_node')
 
-        config_file = extract_configuration()
+        config_file = extract_configuration() # 설정 파일 로드
+
         if config_file is None:
             self.get_logger().error("Failed to extract configuration file.")
             return
         
+        # 체스판 정보
         self.chessboard_rows = config_file['chessboard']['pattern_size']['rows']
         self.chessboard_cols = config_file['chessboard']['pattern_size']['columns']
         self.square_size = config_file['chessboard']['square_size_meters']
 
+        # 이미지 정보 <- general_configuration.yaml에서 로드
         self.image_topic = config_file['camera']['image_topic']
         self.image_width = config_file['camera']['image_size']['width']
         self.image_height = config_file['camera']['image_size']['height']
 
+        # 출력 경로
         self.output_path = config_file['general']['config_folder']
         self.file = config_file['general']['camera_intrinsic_calibration']
 
+        # 이미지 구독
         self.image_sub = self.create_subscription(Image, self.image_topic, self.image_callback, 10)
-        self.bridge = CvBridge()
+        self.bridge = CvBridge() # ROS 이미지를 OpenCV 이미지로 변환
+
 
         self.obj_points = []
         self.img_points = []
@@ -42,6 +48,7 @@ class CameraCalibrationNode(Node):
         self.objp = np.zeros((self.chessboard_rows * self.chessboard_cols, 3), np.float32)
         self.objp[:, :2] = np.mgrid[0:self.chessboard_cols, 0:self.chessboard_rows].T.reshape(-1, 2)
         self.objp *= self.square_size
+
 
         # 1초에 한 번 실행되는 타이머 설정
         self.timer = self.create_timer(0.3, self.process_latest_image)
@@ -91,11 +98,12 @@ class CameraCalibrationNode(Node):
             rclpy.shutdown()
 
     def save_calibration(self):
-        if len(self.obj_points) < 10:
+        if len(self.obj_points) < 10:  # 최소 10장 이상 캘리브레이션 이미지
             self.get_logger().error("Not enough images for calibration. At least 10 are required.")
             return
 
-        ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(
+        ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera( # 카메라 보정 수행
+            # 입력은 3D 좌표 리스트, 각 이미지에서 감지된 체스보드 2D 좌표 리스트, 이미지 크기, 초기 카메라 행렬과 왜곡 계수는 전달하지 않음
             self.obj_points, self.img_points, (self.image_width, self.image_height), None, None
         )
 
@@ -122,10 +130,10 @@ class CameraCalibrationNode(Node):
                 'width': self.image_width,
                 'height': self.image_height
             },
-            'rms_reprojection_error': ret
+            'rms_reprojection_error': ret   # RMS 재투영 오차(보정 정확도)
         }
 
-        output_file = f"{self.output_path}/{self.file}"
+        output_file = f"{self.output_path}/{self.file}" # 보정 데이터를 YAML 파일로 저장
         try:
             with open(output_file, 'w') as file:
                 yaml.dump(calibration_data, file)
@@ -138,7 +146,7 @@ def main(args=None):
     node = CameraCalibrationNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except KeyboardInterrupt:                                           # 돌다가 키보드로 중지하면 캘리브레이션 끝
         node.save_calibration()
         node.get_logger().info("캘리브레이션 과정 완료.")
     finally:
