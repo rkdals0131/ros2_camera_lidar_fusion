@@ -193,7 +193,16 @@ class LidarCameraProjectionNode(Node):
         out_msg.header = image_msg.header
         self.pub_image.publish(out_msg)  # 퍼블리시
 
-
+def main(args=None):
+    rclpy.init(args=args)
+    node = LidarCameraProjectionNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == "__main__":
     main()

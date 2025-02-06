@@ -23,7 +23,7 @@ general:
   camera_intrinsic_calibration: camera_intrinsic_calibration.yaml
   camera_extrinsic_calibration: camera_extrinsic_calibration.yaml
   slop: 0.1 
-  max_file_saved: 10
+  max_file_saved: 25
   keyboard_listener: True
   get_intrinsics: True
   get_extrinsics: True
