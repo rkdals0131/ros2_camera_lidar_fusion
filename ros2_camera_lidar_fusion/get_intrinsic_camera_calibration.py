@@ -103,7 +103,7 @@ class CameraCalibrationNode(Node):
             return
 
         ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera( # 카메라 보정 수행
-            # 입력은 3D 좌표 리스트, 각 이미지에서 감지된 체스보드 2D 좌표 리스트, 이미지 크기, 초기 카메라 행렬과 왜곡 계수는 전달하지 않음
+            # 입력인자는 3D 좌표 리스트, 각 이미지에서 감지된 체스보드 2D 좌표 리스트, 이미지 크기, 초기 카메라 행렬과 왜곡 계수는 전달하지 않음
             self.obj_points, self.img_points, (self.image_width, self.image_height), None, None
         )
 

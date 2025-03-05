@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
 package_name = 'ros2_camera_lidar_fusion'
 
@@ -11,6 +13,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/config', ['config/general_configuration.yaml']),
+        ('share/' + package_name + '/launch', glob('launch/*.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
