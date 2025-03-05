@@ -3,7 +3,7 @@ lidar:
   frame_id: os_sensor
 
 camera:
-  image_topic: /image_raw # or /image_raw/uncompressed
+  image_topic: /image_raw
   projected_topic: /point_projected_image
   image_size:
     width: 640
