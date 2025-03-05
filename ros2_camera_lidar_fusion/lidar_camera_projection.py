@@ -134,64 +134,81 @@ class LidarCameraProjectionNode(Node):
         self.skip_rate = 1  # 샘플링 비율 설정
 
     def sync_callback(self, image_msg: Image, lidar_msg: PointCloud2): 
-        # 1. ROS 이미지 메시지를 OpenCV 이미지로 변환
-        cv_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='bgr8')  # ROS Image -> OpenCV BGR 이미지
+        try:
+            # Check if image message has data
+            if not image_msg.data:
+                self.get_logger().warn("Received empty image message, skipping processing")
+                return
+                
+            # 1. ROS 이미지 메시지를 OpenCV 이미지로 변환
+            try:
+                # First try with passthrough to preserve original encoding
+                cv_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='passthrough')
+                # Then convert to BGR if necessary
+                if image_msg.encoding != 'bgr8':
+                    cv_image = cv2.cvtColor(cv_image, cv2.COLOR_RGB2BGR)
+            except Exception as e:
+                self.get_logger().error(f"Error converting image: {e}, encoding: {image_msg.encoding}")
+                return
 
-        # 2. 포인트 클라우드 메시지를 XYZ 배열로 변환
-        xyz_lidar = pointcloud2_to_xyz_array_fast(lidar_msg, skip_rate=self.skip_rate)  # LiDAR 데이터 -> (N, 3) XYZ 배열
-        n_points = xyz_lidar.shape[0]
-        if n_points == 0:  # LiDAR 데이터가 비어 있을 경우 처리
-            self.get_logger().warn("Empty cloud. Nothing to project.")
-            # 처리 없이 원본 이미지를 퍼블리시
+            # 2. 포인트 클라우드 메시지를 XYZ 배열로 변환
+            xyz_lidar = pointcloud2_to_xyz_array_fast(lidar_msg, skip_rate=self.skip_rate)  # LiDAR 데이터 -> (N, 3) XYZ 배열
+            n_points = xyz_lidar.shape[0]
+            if n_points == 0:  # LiDAR 데이터가 비어 있을 경우 처리
+                self.get_logger().warn("Empty cloud. Nothing to project.")
+                # 처리 없이 원본 이미지를 퍼블리시
+                out_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')  # OpenCV 이미지 -> ROS Image 메시지
+                out_msg.header = image_msg.header
+                self.pub_image.publish(out_msg)  # 퍼블리시
+                return
+
+            # 3. 포인트 클라우드 데이터 준비: 동차 좌표 변환
+            xyz_lidar_f64 = xyz_lidar.astype(np.float64)  # LiDAR 데이터를 float64 형식으로 변환
+            ones = np.ones((n_points, 1), dtype=np.float64)  # 동차 좌표 계산을 위한 1 추가
+            xyz_lidar_h = np.hstack((xyz_lidar_f64, ones))  # 동차 좌표로 변환 (N, 4)
+
+            # 4. LiDAR 좌표계를 카메라 좌표계로 변환
+            xyz_cam_h = xyz_lidar_h @ self.T_lidar_to_cam.T  # 변환 행렬(T) 적용: LiDAR -> 카메라 좌표계
+            xyz_cam = xyz_cam_h[:, :3]  # 동차 좌표에서 3D 좌표(x, y, z) 추출
+
+            # 5. 카메라 앞에 있는 포인트 필터링
+            mask_in_front = (xyz_cam[:, 2] > 0.0)  # z > 0: 카메라 앞에 위치한 포인트만 선택
+            xyz_cam_front = xyz_cam[mask_in_front]  # 필터링된 3D 포인트
+            n_front = xyz_cam_front.shape[0]
+            if n_front == 0:  # 카메라 앞에 포인트가 없을 경우 처리
+                self.get_logger().info("No points in front of camera (z>0).")
+                # 처리 없이 원본 이미지를 퍼블리시
+                out_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')  # OpenCV 이미지 -> ROS Image 메시지
+                out_msg.header = image_msg.header
+                self.pub_image.publish(out_msg)  # 퍼블리시
+                return
+
+            # 6. 3D 포인트를 2D 이미지로 투영
+            rvec = np.zeros((3,1), dtype=np.float64)  # 카메라 회전 벡터 (0 초기화)
+            tvec = np.zeros((3,1), dtype=np.float64)  # 카메라 변환 벡터 (0 초기화)
+            image_points, _ = cv2.projectPoints(
+                xyz_cam_front,  # 3D 포인트 (카메라 좌표계)
+                rvec, tvec,     # 회전 및 이동 벡터
+                self.camera_matrix,  # 카메라 매트릭스
+                self.dist_coeffs      # 렌즈 왜곡 계수
+            )
+            image_points = image_points.reshape(-1, 2)  # 결과: (N, 2) 형태의 2D 이미지 포인트 배열
+
+            # 7. 투영된 2D 포인트를 이미지 위에 시각화
+            h, w = cv_image.shape[:2]  # 이미지 크기 가져오기 (높이, 너비)
+            for (u, v) in image_points:  # 각 포인트에 대해
+                u_int = int(u + 0.5)  # 정수형 좌표로 변환 (반올림)
+                v_int = int(v + 0.5)
+                if 0 <= u_int < w and 0 <= v_int < h:  # 포인트가 이미지 범위 내에 있는 경우
+                    cv2.circle(cv_image, (u_int, v_int), 2, (0, 255, 0), -1)  # 초록색 원으로 포인트 표시
+
+            # 8. 처리 결과 이미지를 ROS 메시지로 변환 및 퍼블리시
             out_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')  # OpenCV 이미지 -> ROS Image 메시지
             out_msg.header = image_msg.header
             self.pub_image.publish(out_msg)  # 퍼블리시
-            return
 
-        # 3. 포인트 클라우드 데이터 준비: 동차 좌표 변환
-        xyz_lidar_f64 = xyz_lidar.astype(np.float64)  # LiDAR 데이터를 float64 형식으로 변환
-        ones = np.ones((n_points, 1), dtype=np.float64)  # 동차 좌표 계산을 위한 1 추가
-        xyz_lidar_h = np.hstack((xyz_lidar_f64, ones))  # 동차 좌표로 변환 (N, 4)
-
-        # 4. LiDAR 좌표계를 카메라 좌표계로 변환
-        xyz_cam_h = xyz_lidar_h @ self.T_lidar_to_cam.T  # 변환 행렬(T) 적용: LiDAR -> 카메라 좌표계
-        xyz_cam = xyz_cam_h[:, :3]  # 동차 좌표에서 3D 좌표(x, y, z) 추출
-
-        # 5. 카메라 앞에 있는 포인트 필터링
-        mask_in_front = (xyz_cam[:, 2] > 0.0)  # z > 0: 카메라 앞에 위치한 포인트만 선택
-        xyz_cam_front = xyz_cam[mask_in_front]  # 필터링된 3D 포인트
-        n_front = xyz_cam_front.shape[0]
-        if n_front == 0:  # 카메라 앞에 포인트가 없을 경우 처리
-            self.get_logger().info("No points in front of camera (z>0).")
-            # 처리 없이 원본 이미지를 퍼블리시
-            out_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')  # OpenCV 이미지 -> ROS Image 메시지
-            out_msg.header = image_msg.header
-            self.pub_image.publish(out_msg)  # 퍼블리시
-            return
-
-        # 6. 3D 포인트를 2D 이미지로 투영
-        rvec = np.zeros((3,1), dtype=np.float64)  # 카메라 회전 벡터 (0 초기화)
-        tvec = np.zeros((3,1), dtype=np.float64)  # 카메라 변환 벡터 (0 초기화)
-        image_points, _ = cv2.projectPoints(
-            xyz_cam_front,  # 3D 포인트 (카메라 좌표계)
-            rvec, tvec,     # 회전 및 이동 벡터
-            self.camera_matrix,  # 카메라 매트릭스
-            self.dist_coeffs      # 렌즈 왜곡 계수
-        )
-        image_points = image_points.reshape(-1, 2)  # 결과: (N, 2) 형태의 2D 이미지 포인트 배열
-
-        # 7. 투영된 2D 포인트를 이미지 위에 시각화
-        h, w = cv_image.shape[:2]  # 이미지 크기 가져오기 (높이, 너비)
-        for (u, v) in image_points:  # 각 포인트에 대해
-            u_int = int(u + 0.5)  # 정수형 좌표로 변환 (반올림)
-            v_int = int(v + 0.5)
-            if 0 <= u_int < w and 0 <= v_int < h:  # 포인트가 이미지 범위 내에 있는 경우
-                cv2.circle(cv_image, (u_int, v_int), 2, (0, 255, 0), -1)  # 초록색 원으로 포인트 표시
-
-        # 8. 처리 결과 이미지를 ROS 메시지로 변환 및 퍼블리시
-        out_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')  # OpenCV 이미지 -> ROS Image 메시지
-        out_msg.header = image_msg.header
-        self.pub_image.publish(out_msg)  # 퍼블리시
+        except Exception as e:
+            self.get_logger().error(f"Error in sync_callback: {str(e)}")
 
 def main(args=None):
     rclpy.init(args=args)
