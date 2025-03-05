@@ -82,11 +82,20 @@ class SaveData(Node):
         if self.save_data_flag: # 데이터 저장 여부 제어, 키보드 리스너 사용시 저장 후 플래그 비활성화
             file_name = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
             self.get_logger().info(f'Synchronizing data at {file_name}')
+            
+            # 메시지가 유효한지 확인
+            if not image_msg.data or not pointcloud_msg.data:
+                self.get_logger().warn("Received empty image or pointcloud data, skipping...")
+                return
+                
             total_files = len(os.listdir(self.storage_path)) # 저장 경로에 있는 파일 수
             if total_files < self.max_file_saved: # 최대 저장 파일 수보다 저장된 파일 수가 적으면
-                self.save_data(image_msg, pointcloud_msg, file_name) # 데이터 저장
-                if self.keyboard_listener_enabled: # 키보드 리스너 사용시 저장 후 플래그 비활성화
-                    self.save_data_flag = False
+                try:
+                    self.save_data(image_msg, pointcloud_msg, file_name) # 데이터 저장
+                    if self.keyboard_listener_enabled: # 키보드 리스너 사용시 저장 후 플래그 비활성화
+                        self.save_data_flag = False
+                except Exception as e:
+                    self.get_logger().error(f"Failed to save data: {e}")
 
     # ROS의 PointCloud2 메시지를 Open3D 포인트 클라우드로 변환
     def pointcloud2_to_open3d(self, pointcloud_msg):
@@ -101,12 +110,28 @@ class SaveData(Node):
     # 데이터 저장
     def save_data(self, image_msg, pointcloud_msg, file_name):
         """Saves image and point cloud data to the storage path."""
-        bridge = CvBridge()                                 # 이미지 메시지를 
-        image = bridge.imgmsg_to_cv2(image_msg, 'bgr8')     # OpenCV 이미지로 변환
-        pointcloud = self.pointcloud2_to_open3d(pointcloud_msg) # 라이다 포인트 토픽을 Open3D 포인트 클라우드로 변환
-        o3d.io.write_point_cloud(f'{self.storage_path}/{file_name}.pcd', pointcloud) # 포인트 클라우드 데이터 저장
-        cv2.imwrite(f'{self.storage_path}/{file_name}.png', image) # 이미지 데이터 저장
-        self.get_logger().info(f'Data has been saved at {self.storage_path}/{file_name}.png') # 데이터 저장 경로 출력
+        try:
+            bridge = CvBridge()
+            self.get_logger().debug(f"Image encoding: {image_msg.encoding}, width: {image_msg.width}, height: {image_msg.height}")
+            # Try to convert with the message's native encoding first
+            image = bridge.imgmsg_to_cv2(image_msg, desired_encoding="passthrough")
+            # Then convert to BGR if necessary
+            if image_msg.encoding != 'bgr8':
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            
+            pointcloud = self.pointcloud2_to_open3d(pointcloud_msg) # 라이다 포인트 토픽을 Open3D 포인트 클라우드로 변환
+            
+            # Check if the pointcloud has any points
+            if len(pointcloud.points) == 0:
+                self.get_logger().warn("Received empty point cloud, skipping save...")
+                return
+                
+            o3d.io.write_point_cloud(f'{self.storage_path}/{file_name}.pcd', pointcloud) # 포인트 클라우드 데이터 저장
+            cv2.imwrite(f'{self.storage_path}/{file_name}.png', image) # 이미지 데이터 저장
+            self.get_logger().info(f'Data has been saved at {self.storage_path}/{file_name}.png') # 데이터 저장 경로 출력
+        except Exception as e:
+            self.get_logger().error(f"Error in save_data: {e}")
+            raise
 
 
 def main(args=None):
