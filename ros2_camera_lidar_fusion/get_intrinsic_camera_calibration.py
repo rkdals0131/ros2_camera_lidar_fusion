@@ -58,9 +58,21 @@ class CameraCalibrationNode(Node):
     def image_callback(self, msg):
         """이미지 콜백: 최신 이미지만 저장하고, 처리 로직은 타이머에서 실행"""
         try:
-            self.latest_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            # Check if image message has data
+            if not msg.data:
+                self.get_logger().warn("Received empty image message, skipping processing")
+                return
+                
+            # First try with passthrough to preserve original encoding
+            image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+            
+            # Then convert to BGR if necessary
+            if msg.encoding != 'bgr8':
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                
+            self.latest_image = image
         except Exception as e:
-            self.get_logger().error(f"이미지 변환 실패: {e}")
+            self.get_logger().error(f"이미지 변환 실패: {e} (encoding: {msg.encoding})")
 
     def process_latest_image(self):
         """타이머에서 호출: 최신 이미지를 처리"""
@@ -68,6 +80,9 @@ class CameraCalibrationNode(Node):
             self.get_logger().warn("아직 수신된 이미지가 없습니다.")
             return
 
+        # Make a copy to avoid modifying the original
+        display_image = self.latest_image.copy()
+        
         gray = cv2.cvtColor(self.latest_image, cv2.COLOR_BGR2GRAY)
 
         # 체스보드 패턴 검출
@@ -81,16 +96,16 @@ class CameraCalibrationNode(Node):
             )
             self.img_points.append(refined_corners)
 
-            cv2.drawChessboardCorners(self.latest_image, (self.chessboard_cols, self.chessboard_rows), refined_corners, ret)
+            cv2.drawChessboardCorners(display_image, (self.chessboard_cols, self.chessboard_rows), refined_corners, ret)
             self.get_logger().info("체스보드가 감지되어 점들이 추가되었습니다.")
         else:
             self.get_logger().warn("체스보드가 이미지에서 감지되지 않았습니다.")
 
         # 캡처된 이미지 수를 이미지에 표시
-        cv2.putText(self.latest_image, f"Captured Images: {len(self.obj_points)}", (10, 30),
+        cv2.putText(display_image, f"Captured Images: {len(self.obj_points)}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-        cv2.imshow("Image", self.latest_image)
+        cv2.imshow("Image", display_image)
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
             self.save_calibration()

@@ -1,5 +1,5 @@
 lidar:
-  lidar_topic: /ouster/points
+  lidar_topic: /point_cones
   frame_id: os_sensor
 
 camera:
