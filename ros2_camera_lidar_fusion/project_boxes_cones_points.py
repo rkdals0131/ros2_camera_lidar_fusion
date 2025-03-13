@@ -5,6 +5,7 @@ from rclpy.node import Node
 import cv2
 import numpy as np
 import yaml
+import torch
 
 from sensor_msgs.msg import Image, PointCloud2
 from cv_bridge import CvBridge
@@ -12,10 +13,11 @@ from message_filters import Subscriber, ApproximateTimeSynchronizer
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from rcl_interfaces.msg import SetParametersResult
 from custom_interface.msg import ModifiedFloat32MultiArray
+from std_msgs.msg import String
 
 from ros2_camera_lidar_fusion.read_yaml import extract_configuration
+from ultralytics.engine.results import Results, Boxes
 
-from yolo_ros.yolo_debug_node import YoloDebugNode
 
 def load_extrinsic_matrix(yaml_path: str) -> np.ndarray:
     with open(yaml_path, 'r') as f:
@@ -23,6 +25,7 @@ def load_extrinsic_matrix(yaml_path: str) -> np.ndarray:
     matrix_list = data['extrinsic_matrix']
     T = np.array(matrix_list, dtype=np.float64)
     return T
+
 
 def load_camera_calibration(yaml_path: str) -> (np.ndarray, np.ndarray):
     with open(yaml_path, 'r') as f:
@@ -32,6 +35,7 @@ def load_camera_calibration(yaml_path: str) -> (np.ndarray, np.ndarray):
     dist_data = calib_data['distortion_coefficients']['data']
     dist_coeffs = np.array(dist_data, dtype=np.float64).reshape((1, -1))
     return camera_matrix, dist_coeffs
+
 
 def pointcloud2_to_xyz_array_fast(cloud_msg: PointCloud2, skip_rate: int = 1) -> np.ndarray:
     if cloud_msg.height == 0 or cloud_msg.width == 0:
@@ -57,17 +61,41 @@ def pointcloud2_to_xyz_array_fast(cloud_msg: PointCloud2, skip_rate: int = 1) ->
         points = points[::skip_rate]
     return points
 
-class FusionProjectionNode(Node):  
+
+class FusionBoxesProjectionNode(Node):  
     def __init__(self):
-        super().__init__('fusion_projection_node')
+        super().__init__('fusion_boxes_projection_node')
         
         # z 좌표를 파라미터로 선언
-        self.declare_parameter('cone_z_offset', -0.6)  # 기본값 -0.3m (콘이 라이다보다 아래에 있다고 가정)
+        self.declare_parameter('cone_z_offset', -0.6)  # 기본값 -0.6m (콘이 라이다보다 아래에 있다고 가정)
         self.cone_z_offset = self.get_parameter('cone_z_offset').value
         self.get_logger().info(f"Using cone z offset: {self.cone_z_offset} meters")
         
+        # Additional visualization parameters
+        self.declare_parameter('box_width', 50)  # Default bounding box width
+        self.declare_parameter('box_height', 100)  # Default bounding box height
+        self.declare_parameter('draw_circles', True)  # Whether to draw circles for cones
+        self.declare_parameter('draw_boxes', True)  # Whether to draw bounding boxes
+        
+        # Get parameters
+        self.box_width = self.get_parameter('box_width').value
+        self.box_height = self.get_parameter('box_height').value
+        self.draw_circles = self.get_parameter('draw_circles').value
+        self.draw_boxes = self.get_parameter('draw_boxes').value
+        
         # 파라미터 변경 콜백 설정
         self.add_on_set_parameters_callback(self.parameters_callback)
+        
+        # Color mapping for cone visualization
+        self.color_mapping = {
+            "Crimson Cone": (0, 0, 255),   # Red in BGR
+            "Yellow Cone":  (0, 255, 255), # Yellow in BGR
+            "Blue Cone":    (255, 0, 0),   # Blue in BGR
+            "Unknown":      (0, 255, 0)    # Green in BGR (default)
+        }
+        
+        # Class names for YOLO results mock
+        self.class_names = {0: "Blue Cone", 1: "Crimson Cone", 2: "Yellow Cone"}
         
         config_file = extract_configuration() 
         if config_file is None:
@@ -115,6 +143,9 @@ class FusionProjectionNode(Node):
         self.pub_image = self.create_publisher(Image, projected_topic, 1)
         self.bridge = CvBridge()
 
+        # Add a publisher for cone info string
+        self._info_pub = self.create_publisher(String, "cone_info", 10)
+
         self.skip_rate = 1
 
     def parameters_callback(self, params):
@@ -122,7 +153,67 @@ class FusionProjectionNode(Node):
             if param.name == 'cone_z_offset':
                 self.cone_z_offset = param.value
                 self.get_logger().info(f"Updated cone z offset to: {self.cone_z_offset} meters")
+            elif param.name == 'box_width':
+                self.box_width = param.value
+                self.get_logger().info(f"Updated box width to: {self.box_width} pixels")
+            elif param.name == 'box_height':
+                self.box_height = param.value
+                self.get_logger().info(f"Updated box height to: {self.box_height} pixels")
+            elif param.name == 'draw_circles':
+                self.draw_circles = param.value
+                self.get_logger().info(f"Updated draw_circles to: {self.draw_circles}")
+            elif param.name == 'draw_boxes':
+                self.draw_boxes = param.value
+                self.get_logger().info(f"Updated draw_boxes to: {self.draw_boxes}")
         return SetParametersResult(successful=True)
+
+    def draw_detections(self, cv_image: np.ndarray, results: Results,
+                      verified_labels: list = None) -> np.ndarray:
+        """
+        Draw detection results on the image with color verification.
+        
+        This function is adapted from YoloDebugNode's draw_detections method.
+
+        Args:
+            cv_image: OpenCV image (in BGR format)
+            results: YOLO detection results
+            verified_labels: List of verified color labels
+
+        Returns:
+            Image with drawn detections
+        """
+        # Create a copy of the image to draw on
+        debug_image = cv_image.copy()
+
+        # Draw bounding boxes for detected objects
+        if results.boxes:
+            for i, box in enumerate(results.boxes):
+                # Get bounding box coordinates
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+                # Get class information
+                cls_id = int(box.cls[0])
+                conf = float(box.conf[0])
+
+                # Use verified labels if available
+                if verified_labels and i < len(verified_labels):
+                    cls_name = verified_labels[i]
+                else:
+                    cls_name = self.class_names[cls_id]
+
+                # Get color from color mapping
+                color = self.color_mapping.get(cls_name, (0, 255, 0))  # Default: green
+
+                # Draw rectangle
+                cv2.rectangle(debug_image, (x1, y1), (x2, y2), color, 2)
+
+                # Add label text
+                label = f"{cls_name} {conf:.2f}"
+                t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)[0]
+                cv2.rectangle(debug_image, (x1, y1), (x1 + t_size[0], y1 - t_size[1] - 10), color, -1)
+                cv2.putText(debug_image, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+
+        return debug_image
 
     def sync_callback(self, image_msg: Image, lidar_msg: PointCloud2, cones_msg: ModifiedFloat32MultiArray):
         try:
@@ -217,15 +308,61 @@ class FusionProjectionNode(Node):
                         )
                         cone_image_points = cone_image_points.reshape(-1, 2)
                         
-                        # 10. 투영된 cone 포인트를 이미지에 빨간색 마커로 시각화
+                        # 10. 투영된 cone 포인트를 이미지에 시각화
                         h, w = cv_image.shape[:2]
-                        for (u, v) in cone_image_points:
-                            u_int = int(round(u))
-                            v_int = int(round(v))
-                            if 0 <= u_int < w and 0 <= v_int < h:
-                                cv2.circle(cv_image, (u_int, v_int), 4, (0, 0, 255), -1)  # 빨간색 원
-                                # 크기를 더 크게 하고 테두리도 추가
-                                cv2.circle(cv_image, (u_int, v_int), 6, (255, 255, 255), 1)  # 흰색 테두리
+                        detection_info = []
+                        
+                        # Draw circles if enabled
+                        if self.draw_circles:
+                            for (u, v) in cone_image_points:
+                                u_int = int(round(u))
+                                v_int = int(round(v))
+                                if 0 <= u_int < w and 0 <= v_int < h:
+                                    cv2.circle(cv_image, (u_int, v_int), 4, (0, 0, 255), -1)  # 빨간색 원
+                                    cv2.circle(cv_image, (u_int, v_int), 6, (255, 255, 255), 1)  # 흰색 테두리
+                        
+                        # Draw bounding boxes if enabled
+                        if self.draw_boxes:
+                            # Create mock YOLO results for bounding box drawing
+                            mock_results = Results(
+                                orig_img=cv_image,
+                                path="",
+                                names=self.class_names
+                            )
+                            
+                            # Create bounding boxes for detected cones
+                            boxes_list = []
+                            for i, (u, v) in enumerate(cone_image_points):
+                                u_int = int(round(u))
+                                v_int = int(round(v))
+                                if 0 <= u_int < w and 0 <= v_int < h:
+                                    # For each cone, create a bounding box (x1, y1, x2, y2)
+                                    x1 = max(0, u_int - self.box_width // 2)
+                                    y1 = max(0, v_int - self.box_height)
+                                    x2 = min(w, x1 + self.box_width)
+                                    y2 = min(h, v_int)
+                                    
+                                    # Add bounding box - default to yellow cones (class 2)
+                                    boxes_list.append([x1, y1, x2, y2, 0.95, 2])  # [x1, y1, x2, y2, conf, cls]
+                                    
+                                    # Add to detection info
+                                    cone_type = "Yellow Cone"  # Default, can be improved with color detection
+                                    detection_info.append(f"{cone_type}: ({u_int}, {v_int})")
+                            
+                            if boxes_list:
+                                # Convert to tensor
+                                boxes_tensor = torch.tensor(boxes_list)
+                                # Create Boxes object and assign to results
+                                mock_results.boxes = Boxes(boxes_tensor, mock_results.orig_shape)
+                                
+                                # Use our draw_detections method
+                                cv_image = self.draw_detections(cv_image, mock_results)
+                        
+                        # Publish cone info
+                        if detection_info:
+                            info_msg = String()
+                            info_msg.data = "; ".join(detection_info)
+                            self._info_pub.publish(info_msg)
 
             # 11. 결과 이미지를 퍼블리시
             out_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
@@ -237,9 +374,10 @@ class FusionProjectionNode(Node):
             import traceback
             self.get_logger().error(traceback.format_exc())
 
+
 def main(args=None):
     rclpy.init(args=args)
-    node = FusionProjectionNode()
+    node = FusionBoxesProjectionNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -247,6 +385,7 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()
