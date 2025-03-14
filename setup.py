@@ -31,6 +31,7 @@ setup(
             'lidar_camera_projection = ros2_camera_lidar_fusion.lidar_camera_projection:main',
             'project_cones_and_points = ros2_camera_lidar_fusion.project_cones_and_points:main',
             'project_boxes_cones_points = ros2_camera_lidar_fusion.project_boxes_cones_points:main',
+            'debugging_palette = ros2_camera_lidar_fusion.debugging_palette:main',
         ],
     },
 )
