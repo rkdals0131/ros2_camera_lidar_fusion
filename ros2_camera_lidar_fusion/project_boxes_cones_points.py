@@ -1,7 +1,7 @@
 import os
 import rclpy
 from rclpy.node import Node
-
+from typing import Tuple
 import cv2
 import numpy as np
 import yaml
@@ -25,7 +25,7 @@ def load_extrinsic_matrix(yaml_path: str) -> np.ndarray:
     T = np.array(matrix_list, dtype=np.float64)
     return T
 
-def load_camera_calibration(yaml_path: str) -> (np.ndarray, np.ndarray):
+def load_camera_calibration(yaml_path: str) -> Tuple[np.ndarray, np.ndarray]:
     with open(yaml_path, 'r') as f:
         calib_data = yaml.safe_load(f)
     cam_mat_data = calib_data['camera_matrix']['data']
