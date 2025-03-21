@@ -63,7 +63,7 @@ class FusionProjectionNode(Node):
         super().__init__('fusion_projection_node')
         
         # z 좌표를 파라미터로 선언
-        self.declare_parameter('cone_z_offset', -0.6)  # 기본값 -0.3m (콘이 라이다보다 아래에 있다고 가정)
+        self.declare_parameter('cone_z_offset', -0.4)  # 기본값 -0.3m (콘이 라이다보다 아래에 있다고 가정)
         self.cone_z_offset = self.get_parameter('cone_z_offset').value
         self.get_logger().info(f"Using cone z offset: {self.cone_z_offset} meters")
         

@@ -1,9 +1,9 @@
 lidar:
-  lidar_topic: /point_cones
+  lidar_topic: /ouster/points
   frame_id: os_sensor
 
 camera:
-  image_topic: /image_raw
+  image_topic: /image_raw/uncompressed
   projected_topic: /point_projected_image
   image_size:
     width: 640
