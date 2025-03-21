@@ -37,25 +37,45 @@ def load_camera_calibration(yaml_path: str) -> Tuple[np.ndarray, np.ndarray]:
 def pointcloud2_to_xyz_array_fast(cloud_msg: PointCloud2, skip_rate: int = 1) -> np.ndarray:
     if cloud_msg.height == 0 or cloud_msg.width == 0:
         return np.zeros((0, 3), dtype=np.float32)
+    
+    # Get field names and print for debugging
     field_names = [f.name for f in cloud_msg.fields]
-    if not all(k in field_names for k in ('x','y','z')):
+    print(f"Available fields in pointcloud: {field_names}")
+    
+    # Try to find x, y, z fields with different possible names
+    x_field = None
+    y_field = None
+    z_field = None
+    
+    for field in cloud_msg.fields:
+        if field.name.lower() in ['x', 'point_x']:
+            x_field = field
+        elif field.name.lower() in ['y', 'point_y']:
+            y_field = field
+        elif field.name.lower() in ['z', 'point_z']:
+            z_field = field
+    
+    if not all([x_field, y_field, z_field]):
+        print(f"Missing required fields. Found: x={x_field}, y={y_field}, z={z_field}")
         return np.zeros((0,3), dtype=np.float32)
-    x_field = next(f for f in cloud_msg.fields if f.name=='x')
-    y_field = next(f for f in cloud_msg.fields if f.name=='y')
-    z_field = next(f for f in cloud_msg.fields if f.name=='z')
+    
+    # Create dtype based on actual field names
     dtype = np.dtype([
-        ('x', np.float32),
-        ('y', np.float32),
-        ('z', np.float32),
+        (x_field.name, np.float32),
+        (y_field.name, np.float32),
+        (z_field.name, np.float32),
         ('_', 'V{}'.format(cloud_msg.point_step - 12))
     ])
+    
     raw_data = np.frombuffer(cloud_msg.data, dtype=dtype)
     points = np.zeros((raw_data.shape[0], 3), dtype=np.float32)
-    points[:,0] = raw_data['x']
-    points[:,1] = raw_data['y']
-    points[:,2] = raw_data['z']
+    points[:,0] = raw_data[x_field.name]
+    points[:,1] = raw_data[y_field.name]
+    points[:,2] = raw_data[z_field.name]
+    
     if skip_rate > 1:
         points = points[::skip_rate]
+    
     return points
 
 class FusionProjectionNode(Node):  
@@ -152,8 +172,10 @@ class FusionProjectionNode(Node):
                 return
 
             # 2. 포인트 클라우드 메시지(LiDAR)를 XYZ 배열로 변환
+            self.get_logger().info(f"Processing pointcloud with {lidar_msg.width}x{lidar_msg.height} points")
             xyz_lidar = pointcloud2_to_xyz_array_fast(lidar_msg, skip_rate=self.skip_rate)
             n_points = xyz_lidar.shape[0]
+            self.get_logger().info(f"Converted to {n_points} XYZ points")
             
             if n_points > 0:  # LiDAR 데이터가 있는 경우 처리
                 # 3. 포인트 클라우드 데이터 준비: 동차 좌표 변환

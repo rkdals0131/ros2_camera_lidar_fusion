@@ -1,6 +1,6 @@
 lidar:
-  lidar_topic: /ouster/points
-  frame_id: os_sensor
+  lidar_topic: /point_cones
+  frame_id: os_lidar
 
 camera:
   image_topic: /image_raw/uncompressed
